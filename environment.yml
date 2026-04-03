@@ -1,0 +1,27 @@
+name: thermal-flow
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pytorch>=2.2
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
+  - numpy
+  - scipy
+  - matplotlib
+  - scikit-learn
+  - pyyaml
+  - tqdm
+  - jupyter
+  - pytest
+  - pip
+  - pip:
+      - wandb
+      - hydra-core
+      - omegaconf
+      - torchdiffeq
+      - einops

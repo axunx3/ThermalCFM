@@ -1,0 +1,6 @@
+# Additional pip dependencies (use after conda env creation)
+wandb
+hydra-core
+omegaconf
+torchdiffeq
+einops

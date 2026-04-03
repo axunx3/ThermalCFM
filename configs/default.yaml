@@ -1,0 +1,9 @@
+# Default configuration for Thermal Flow project
+seed: 42
+device: cuda
+
+# Experiment tracking
+wandb:
+  project: thermal-flow
+  entity: null  # set your W&B username
+  mode: online  # online, offline, disabled
