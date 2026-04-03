@@ -1,9 +1,13 @@
-# Default configuration for Thermal Flow project
+# Default configuration for Thermal CFM Framework
 seed: 42
 device: cuda
 
+# Forward model selection (the only thing you change between methods)
+forward_model:
+  name: flash  # flash | 3omega | tdtr
+
 # Experiment tracking
 wandb:
-  project: thermal-flow
-  entity: null  # set your W&B username
-  mode: online  # online, offline, disabled
+  project: thermal-cfm
+  entity: null
+  mode: online

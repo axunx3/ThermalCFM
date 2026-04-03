@@ -1,7 +1,9 @@
 """Conditional Flow Matching training logic.
 
-Implements the CFM objective:
-    L(θ) = E_{t, x_0, x_1} || v_θ(x_t, t, y) - (x_1 - x_0) ||²
+Forward-model agnostic: works with any (theta, y) pairs regardless of
+which thermal measurement technique generated them. The CFM objective is:
+
+    L(θ_net) = E_{t, x_0, x_1} || v_θ(x_t, t, y) - (x_1 - x_0) ||²
 
 where x_t = (1-t)x_0 + t·x_1 is the linear interpolation between
 noise x_0 and target x_1, and y is the measurement condition.
@@ -17,6 +19,10 @@ from .velocity_net import VelocityNet
 
 class ConditionalFlowMatching(nn.Module):
     """Conditional Flow Matching training wrapper.
+
+    This is the core of the universal thermal inversion framework.
+    It operates purely on (theta, y) pairs and knows nothing about
+    the specific measurement technique.
 
     Args:
         velocity_net: The velocity field network v_θ.
@@ -40,8 +46,8 @@ class ConditionalFlowMatching(nn.Module):
         """Compute the CFM training loss.
 
         Args:
-            x_1: Target samples (κ profiles), shape (batch, x_dim).
-            y: Conditioning signals (V_3ω), shape (batch, y_dim).
+            x_1: Target samples (θ in whatever space), shape (batch, theta_dim).
+            y: Conditioning signals (measurements), shape (batch, y_dim).
 
         Returns:
             Scalar loss value.
@@ -78,13 +84,33 @@ class ConditionalFlowMatching(nn.Module):
     ) -> torch.Tensor:
         """Generate posterior samples via Euler ODE integration.
 
+        For each measurement y, generates n_samples posterior samples
+        by integrating the learned velocity field from t=0 to t=1.
+
         Args:
             y: Conditioning signal, shape (batch, y_dim).
             n_steps: Number of Euler integration steps.
             n_samples: Number of posterior samples per condition.
 
         Returns:
-            Generated κ profiles, shape (batch * n_samples, x_dim).
+            Generated θ samples, shape (batch * n_samples, theta_dim).
         """
-        # TODO: Implement ODE integration (Euler or use torchdiffeq)
-        raise NotImplementedError
+        batch_size = y.shape[0]
+        device = y.device
+
+        # Repeat y for multiple samples
+        if n_samples > 1:
+            y = y.repeat_interleave(n_samples, dim=0)
+
+        # Start from noise
+        x_dim = self.velocity_net.output_proj.out_features
+        x = torch.randn(batch_size * n_samples, x_dim, device=device)
+
+        # Euler integration
+        dt = 1.0 / n_steps
+        for step in range(n_steps):
+            t = torch.full((x.shape[0],), step * dt, device=device)
+            v = self.velocity_net(x, t, y)
+            x = x + v * dt
+
+        return x

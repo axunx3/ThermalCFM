@@ -1,0 +1,56 @@
+# Phase 2: 3-omega depth profiling — ~100-dim inversion + UQ
+# 6-8 weeks
+defaults:
+  - default
+
+forward_model:
+  name: 3omega
+  n_layers: 100
+  heater_half_width: 5.0e-6
+  n_freq: 60
+  freq_min: 10.0
+  freq_max: 1.0e5
+  z_max: 50.0e-6
+  rho_cp_default: 1.63e6
+  n_quadrature: 64
+  k_max: 1.0e7
+  kappa_min: 0.1
+  kappa_max: 400.0
+  noise_real: 0.03
+  noise_imag: 0.07
+
+dataset:
+  n_train: 100000
+  n_val: 10000
+  n_test: 10000
+  use_log_theta: true
+  save_dir: data/3omega
+
+model:
+  velocity_net:
+    hidden_dims: [512, 512, 512, 512]
+    activation: silu
+    time_embed_dim: 128
+  flow:
+    sigma_min: 1.0e-4
+  reflow:
+    n_rounds: 2
+    n_steps_per_round: 100
+  physics_loss:
+    enabled: true
+    weight: 0.1
+
+training:
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+  epochs: 500
+  batch_size: 512
+  scheduler: cosine
+  warmup_steps: 1000
+  grad_clip: 1.0
+  ema_decay: 0.999
+
+inference:
+  n_steps: 20
+  solver: dopri5
+  n_posterior_samples: 64

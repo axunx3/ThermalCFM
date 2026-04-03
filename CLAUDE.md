@@ -1,43 +1,46 @@
-# Thermal Flow - Project Guide for Claude Code
+# Thermal CFM - Project Guide
 
 ## Overview
-PhD research project: using Conditional Flow Matching (CFM) / Rectified Flow to solve the 3-omega thermal conductivity depth profiling inverse problem.
+PhD research: Conditional Flow Matching as a **universal framework** for thermal property inversion. Not "CFM for 3ω" — it's "CFM as a paradigm shift for all thermal inverse problems."
+
+The key insight: all thermal measurements share y = F[θ] + η, satisfying CFM convergence conditions (C1: F continuous, C2: bounded prior, C3: positive-density noise).
 
 ## Key Terminology
-- **3-omega method**: Contact-based thermal measurement using AC-heated metal line, extracts κ(z) from V_3ω(f)
-- **Borca-Tasciuc model**: Transfer matrix forward model mapping κ(z) → V_3ω(f), differentiable via PyTorch
-- **CFM (Conditional Flow Matching)**: Generative model learning velocity fields v_θ(x_t, t, y) for conditional transport
-- **Rectified Flow / Reflow**: Iterative trajectory straightening enabling few-step generation
-- **Virtual Wave**: Burgholzer's transform converting diffusion fields to wave fields; conceptual predecessor to Reflow
-- **Resolution limit**: Δz = 2π·z / ln(SNR) — fundamental thermodynamic bound on depth resolution
+- **Forward model F**: maps thermal parameters θ to measurements y (pluggable)
+- **CFM**: learns velocity field v_θ(x_t, t, y) for conditional posterior sampling
+- **Reflow**: trajectory straightening for few-step inference (data-driven Virtual Wave)
+- **Burgholzer resolution limit**: Δz = 2πz/ln(SNR), the physical validation target
+- **UQ**: uncertainty quantification — the core advantage over MLP/KRR
 
-## Project Structure
-- `src/thermal_flow/forward/`: Borca-Tasciuc forward model + data generation
-- `src/thermal_flow/models/`: CFM, VelocityNet, Reflow, physics loss
-- `src/thermal_flow/baselines/`: Feldman, Tikhonov, KRR, MLP
-- `src/thermal_flow/inference/`: ODE sampling + uncertainty quantification
-- `src/thermal_flow/evaluation/`: Metrics + Burgholzer resolution limit validation
-- `configs/`: Hydra/OmegaConf YAML configs
-- `scripts/`: Training and evaluation entry points
+## Architecture: Pluggable Forward Models
+- `forward/base.py`: `ForwardModel` ABC — implement `forward()`, `sample_prior()`, `add_noise()`, `spec`
+- `forward/flash.py`: Flash method (Phase 1, 2 params)
+- `forward/borca_tasciuc.py`: 3-omega (Phase 2, ~100 dims)
+- `forward/tdtr.py`: TDTR (Phase 2, 4+ params)
+- Everything downstream (CFM, inference, evaluation) is forward-model agnostic
+
+## Research Phases
+- Phase 1: Flash → validate CFM convergence (3-4 weeks)
+- Phase 2: 3ω + TDTR → validate UQ vs physical limits (6-8 weeks)
+- Phase 3: IR thermography 3D → validate large-scale (semester)
+
+## Config-Driven Workflow
+```bash
+# Same pipeline, different config = different method
+python scripts/generate_dataset.py --config configs/flash.yaml
+python scripts/train_cfm.py --config configs/flash.yaml
+python scripts/evaluate.py --config configs/flash.yaml --checkpoint ...
+```
 
 ## Development Commands
 ```bash
-# Environment
-conda env create -f environment.yml
-conda activate thermal-flow
+conda env create -f environment.yml && conda activate thermal-flow
 pip install -e .
-
-# Tests
 pytest tests/
-
-# Training
-python scripts/generate_dataset.py --config configs/dataset.yaml
-python scripts/train_cfm.py --config configs/cfm.yaml
 ```
 
 ## Conventions
-- Use PyTorch for all numerical computation (including forward model) to maintain differentiability
-- Work in log(κ) space for training (LogKappaTransform)
-- Configs managed via OmegaConf/Hydra YAML files
-- Experiment tracking via Weights & Biases
-- All physical quantities in SI units (m, W, K, Hz)
+- PyTorch throughout (differentiability for physics loss)
+- Log-space for parameters spanning orders of magnitude
+- OmegaConf YAML configs, W&B experiment tracking
+- SI units (m, W, K, Hz)

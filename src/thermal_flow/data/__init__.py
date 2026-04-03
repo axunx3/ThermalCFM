@@ -1,4 +1,4 @@
-from .dataset import Thermal3OmegaDataset
+from .dataset import ThermalInverseDataset
 from .transforms import LogKappaTransform, ZScoreNormalize
 
-__all__ = ["Thermal3OmegaDataset", "LogKappaTransform", "ZScoreNormalize"]
+__all__ = ["ThermalInverseDataset", "LogKappaTransform", "ZScoreNormalize"]

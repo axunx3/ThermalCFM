@@ -1,12 +1,16 @@
 """Run Reflow iterations for trajectory straightening.
 
 Usage:
-    python scripts/reflow.py --checkpoint outputs/cfm/best.pt [--config configs/cfm.yaml]
+    python scripts/reflow.py --config configs/flash.yaml --checkpoint outputs/flash/best.pt
 """
 
 import argparse
 import torch
-from thermal_flow.models import RectifiedFlow, ConditionalFlowMatching
+from pathlib import Path
+
+from thermal_flow.forward import get_forward_model
+from thermal_flow.models import VelocityNet, ConditionalFlowMatching, RectifiedFlow
+from thermal_flow.data import ThermalInverseDataset
 from thermal_flow.utils import load_config, get_logger
 
 logger = get_logger(__name__)
@@ -14,9 +18,8 @@ logger = get_logger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Reflow iterations")
+    parser.add_argument("--config", type=str, default="configs/flash.yaml")
     parser.add_argument("--checkpoint", type=str, required=True)
-    parser.add_argument("--config", type=str, default="configs/cfm.yaml")
-    parser.add_argument("--n-rounds", type=int, default=2)
     parser.add_argument("--overrides", nargs="*", default=[])
     args = parser.parse_args()
 
@@ -24,7 +27,7 @@ def main():
 
     # TODO: Load trained CFM model
     # TODO: For each reflow round:
-    #   - Generate (x_0, x_1) pairs
+    #   - Generate (x_0, x_1) pairs via ODE integration
     #   - Retrain CFM on straightened pairs
     # TODO: Optional one-step distillation
 

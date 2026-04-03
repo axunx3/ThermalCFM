@@ -1,0 +1,48 @@
+# Phase 1: Flash method — Minimum Viable Proof
+# 2 parameters (α, h), simplest forward model, 3-4 weeks
+defaults:
+  - default
+
+forward_model:
+  name: flash
+  thickness: 1.0e-3        # sample thickness L (m)
+  n_time: 200              # time points in transient
+  t_max: 1.0               # max measurement time (s)
+  n_terms: 50              # Fourier series terms
+  noise_level: 0.02        # 2% relative noise
+
+dataset:
+  n_train: 50000
+  n_val: 5000
+  n_test: 5000
+  use_log_theta: true
+  save_dir: data/flash
+
+model:
+  velocity_net:
+    hidden_dims: [256, 256, 256]
+    activation: silu
+    time_embed_dim: 64
+  flow:
+    sigma_min: 1.0e-4
+  reflow:
+    n_rounds: 1
+    n_steps_per_round: 50
+  physics_loss:
+    enabled: true
+    weight: 0.1
+
+training:
+  lr: 3.0e-4
+  weight_decay: 1.0e-5
+  epochs: 200
+  batch_size: 256
+  scheduler: cosine
+  warmup_steps: 500
+  grad_clip: 1.0
+  ema_decay: 0.999
+
+inference:
+  n_steps: 20
+  solver: euler           # euler is fine for 2D problem
+  n_posterior_samples: 256

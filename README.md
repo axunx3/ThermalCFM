@@ -1,37 +1,55 @@
-# Thermal Flow
+# Thermal CFM
 
-**Conditional Flow Matching for 3-omega Thermal Conductivity Depth Profiling**
+**Conditional Flow Matching as a Universal Framework for Thermal Property Inversion**
 
-Solving the ill-posed inverse problem of reconstructing thermal conductivity depth profiles κ(z) from 3-omega frequency-sweep measurements using Conditional Flow Matching / Rectified Flow.
+A unified Bayesian inversion framework for thermal measurement techniques. By plugging in different forward models, the same CFM pipeline provides fast posterior sampling with uncertainty quantification for any thermal inverse problem.
 
-## Motivation
+## Thesis
 
-Current thermal inversion methods face a fundamental trade-off:
-- **MCMC / Bayesian methods**: Full uncertainty quantification, but extremely slow (hours per sample)
-- **MLP / KRR regression**: Fast inference, but point estimates only (no UQ)
+All thermal measurement techniques share the same mathematical structure:
+**y = F[θ] + η** — a well-posed Bayesian inverse problem where CFM posterior sampling is guaranteed to converge (Jeong et al. 2025, Dasgupta et al. 2025).
 
-**This project** uses Conditional Flow Matching to achieve both: **millisecond inference** with **full posterior distributions** for uncertainty quantification.
+Current thermal inversion methods face a fundamental gap:
+- **MCMC**: full UQ but hours per sample
+- **MLP/KRR**: millisecond inference but no UQ
 
-## Method
+**CFM fills this gap**: millisecond inference with full posterior distributions.
 
-1. **Forward Model**: Differentiable Borca-Tasciuc transfer matrix (PyTorch)
-2. **Synthetic Data**: 100K+ (κ(z), V_3ω(f)) pairs with realistic noise
-3. **CFM Training**: Learn velocity field v_θ(x_t, t, y) mapping noise → κ posterior
-4. **Reflow**: Straighten ODE trajectories for few-step inference
-5. **Physics Constraint**: Forward model consistency loss for physical validity
-6. **Validation**: Against Burgholzer's thermodynamic resolution limit Δz = 2πz/ln(SNR)
+## Contributions
 
-## Project Structure
+1. **Theory**: All thermal inverse problems satisfy the CFM convergence conditions (C1-C3)
+2. **Framework**: Pluggable forward model architecture — same CFM pipeline for Flash / 3ω / TDTR
+3. **Experiments**: Systematic validation across three measurement methods
+4. **Insight**: CFM posterior width quantitatively matches Burgholzer's resolution limit Δz = 2πz/ln(SNR)
+
+## Supported Methods
+
+| Method | Forward Model | θ | Dim | Phase |
+|--------|--------------|---|-----|-------|
+| Flash | Parker analytical | α, h | 2 | Phase 1 (MVP) |
+| 3-omega | Borca-Tasciuc transfer matrix | κ(z) | ~100 | Phase 2 |
+| TDTR | Multilayer frequency-domain | κ, G, cp | 4+ | Phase 2 |
+
+## Architecture
 
 ```
-src/thermal_flow/
-├── forward/          # Borca-Tasciuc forward model + data generation
-├── data/             # PyTorch datasets + transforms
-├── baselines/        # Feldman, Tikhonov, KRR, MLP
-├── models/           # CFM core: VelocityNet, FlowMatching, Reflow
-├── inference/        # ODE sampling + uncertainty quantification
-├── evaluation/       # Metrics + resolution limit validation
-└── utils/            # Config, logging, W&B integration
+┌────────────────────────────────────────────────────┐
+│              Thermal CFM Framework                  │
+│                                                     │
+│  ┌─────────────┐   ┌──────────────────────────┐    │
+│  │Forward Model│   │    CFM Pipeline           │    │
+│  │  (pluggable)│──→│  VelocityNet + ODE solver │    │
+│  │             │   │  (forward-model agnostic) │    │
+│  │ • Flash     │   └──────────────────────────┘    │
+│  │ • 3-omega   │              │                     │
+│  │ • TDTR      │              ▼                     │
+│  │ • [yours]   │   ┌──────────────────────────┐    │
+│  └─────────────┘   │  Posterior p(θ|y)         │    │
+│                     │  • Mean ± uncertainty     │    │
+│                     │  • Calibration curves     │    │
+│                     │  • Resolution limit check │    │
+│                     └──────────────────────────┘    │
+└────────────────────────────────────────────────────┘
 ```
 
 ## Setup
@@ -45,20 +63,38 @@ pip install -e .
 ## Usage
 
 ```bash
-# Generate synthetic dataset
-python scripts/generate_dataset.py
+# Phase 1: Flash method (start here)
+python scripts/generate_dataset.py --config configs/flash.yaml
+python scripts/train_cfm.py --config configs/flash.yaml
 
-# Train baselines
-python scripts/train_baseline.py
+# Phase 2: 3-omega depth profiling
+python scripts/generate_dataset.py --config configs/three_omega.yaml
+python scripts/train_cfm.py --config configs/three_omega.yaml
 
-# Train CFM model
-python scripts/train_cfm.py
+# Evaluate any method
+python scripts/evaluate.py --config configs/flash.yaml --checkpoint outputs/flash/best.pt
+```
 
-# Run Reflow iterations
-python scripts/reflow.py --checkpoint outputs/cfm/best.pt
+## Adding a New Measurement Method
 
-# Evaluate all methods
-python scripts/evaluate.py --checkpoint outputs/cfm/best.pt
+1. Subclass `ForwardModel` in `src/thermal_flow/forward/`
+2. Implement `forward()`, `sample_prior()`, `add_noise()`, and `spec`
+3. Register in `forward/__init__.py`
+4. Create a config YAML
+5. Run the same pipeline — everything else is automatic
+
+## Research Roadmap
+
+```
+Phase 1 (3-4 weeks):           Phase 2 (6-8 weeks):
+  Flash (2 params, MVP)          3ω depth profiling (~100D)
+  + TDTR/FDTR multi-param        + UQ vs Burgholzer limit
+  ↓                               ↓
+  Validate CFM convergence       Validate at scale
+
+                Phase 3 (semester):
+                  IR thermography 3D (~10⁵D)
+                  + Sensor arrays
 ```
 
 ## License

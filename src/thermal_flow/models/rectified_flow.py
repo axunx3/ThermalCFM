@@ -1,8 +1,12 @@
 """Rectified Flow: Reflow iterations for trajectory straightening.
 
-After initial CFM training, Reflow generates (x_0, x_1) pairs by running
-the learned ODE, then retrains to straighten the trajectories. This enables
-fewer integration steps (or even one-step generation) at inference.
+Forward-model agnostic. After initial CFM training, Reflow generates
+(x_0, x_1) pairs by running the learned ODE, then retrains to straighten
+the trajectories. This enables fewer integration steps at inference.
+
+The deep connection: Reflow is a data-driven generalization of Burgholzer's
+Virtual Wave transform — both straighten curved diffusion trajectories
+into linear paths.
 
 Reference:
     Liu et al., "Flow Straight and Fast" (2023)
@@ -31,31 +35,39 @@ class RectifiedFlow:
     def generate_reflow_pairs(
         self,
         y: torch.Tensor,
-        n_samples: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Generate (x_0, x_1) pairs by running the learned ODE.
 
-        Starts from noise x_0 and integrates to get x_1, creating
-        paired data for the next round of training.
-
         Args:
             y: Conditioning signals, shape (batch, y_dim).
-            n_samples: Number of pairs to generate.
 
         Returns:
             Tuple of (x_0, x_1) tensors for reflow training.
         """
-        # TODO: Run ODE forward to generate paired trajectories
-        raise NotImplementedError
+        batch_size = y.shape[0]
+        device = y.device
+        x_dim = self.cfm.velocity_net.output_proj.out_features
+
+        # Sample starting noise
+        x_0 = torch.randn(batch_size, x_dim, device=device)
+
+        # Integrate ODE to get x_1
+        x = x_0.clone()
+        dt = 1.0 / self.n_steps
+        with torch.no_grad():
+            for step in range(self.n_steps):
+                t = torch.full((batch_size,), step * dt, device=device)
+                v = self.cfm.velocity_net(x, t, y)
+                x = x + v * dt
+
+        x_1 = x
+        return x_0, x_1
 
     def distill_one_step(self, cfm: ConditionalFlowMatching) -> None:
         """Distill the multi-step model into a one-step predictor.
 
         After sufficient Reflow rounds, trajectories are straight enough
         that a single Euler step suffices.
-
-        Args:
-            cfm: The reflowed CFM model to distill.
         """
         # TODO: One-step distillation training
         raise NotImplementedError

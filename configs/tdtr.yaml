@@ -1,0 +1,51 @@
+# Phase 2 extension: TDTR multi-parameter inversion
+defaults:
+  - default
+
+forward_model:
+  name: tdtr
+  n_params: 4
+  param_names: [kappa_sample, G_metal_sample, G_sample_sub, cp_sample]
+  n_delay: 100
+  tau_min: 100.0e-12
+  tau_max: 5.0e-9
+  pump_radius: 10.0e-6
+  probe_radius: 5.0e-6
+  modulation_freq: 10.0e6
+  noise_level: 0.03
+
+dataset:
+  n_train: 100000
+  n_val: 10000
+  n_test: 10000
+  use_log_theta: true
+  save_dir: data/tdtr
+
+model:
+  velocity_net:
+    hidden_dims: [256, 256, 256]
+    activation: silu
+    time_embed_dim: 64
+  flow:
+    sigma_min: 1.0e-4
+  reflow:
+    n_rounds: 1
+    n_steps_per_round: 50
+  physics_loss:
+    enabled: true
+    weight: 0.1
+
+training:
+  lr: 3.0e-4
+  weight_decay: 1.0e-5
+  epochs: 300
+  batch_size: 256
+  scheduler: cosine
+  warmup_steps: 500
+  grad_clip: 1.0
+  ema_decay: 0.999
+
+inference:
+  n_steps: 20
+  solver: euler
+  n_posterior_samples: 256

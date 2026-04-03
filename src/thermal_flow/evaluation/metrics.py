@@ -1,15 +1,21 @@
-"""Evaluation metrics for thermal conductivity inversion.
+"""Evaluation metrics for thermal property inversion.
 
-Includes both point-estimate metrics (MAE, RMSE) and probabilistic
-metrics (NLL, calibration, sharpness) for uncertainty quantification.
+Forward-model agnostic. Includes both point-estimate metrics (MAE, RMSE)
+and probabilistic metrics (NLL, calibration, sharpness) for UQ assessment.
+All metrics work on generic (theta_pred, theta_true) pairs.
 """
 
 import torch
 import numpy as np
 
+from thermal_flow.forward.base import ForwardModel
+
 
 class InversionMetrics:
-    """Compute evaluation metrics for κ(z) inversion results."""
+    """Compute evaluation metrics for thermal inversion results.
+
+    All methods are static and work with any parameter dimensionality.
+    """
 
     @staticmethod
     def mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -22,40 +28,47 @@ class InversionMetrics:
         return ((pred - target) ** 2).mean().sqrt()
 
     @staticmethod
-    def depth_resolved_rmse(
-        pred: torch.Tensor, target: torch.Tensor, z_grid: torch.Tensor
+    def relative_error(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Mean relative error (percentage)."""
+        return ((pred - target).abs() / target.abs().clamp(min=1e-10)).mean() * 100
+
+    @staticmethod
+    def per_param_rmse(
+        pred: torch.Tensor, target: torch.Tensor
     ) -> torch.Tensor:
-        """RMSE at each depth point.
+        """RMSE per parameter dimension.
+
+        For depth profiles: gives depth-resolved RMSE.
+        For multi-parameter: gives per-parameter RMSE.
 
         Args:
-            pred: Predicted κ, shape (batch, n_layers).
-            target: True κ, shape (batch, n_layers).
-            z_grid: Depth grid, shape (n_layers,).
+            pred: shape (batch, theta_dim).
+            target: shape (batch, theta_dim).
 
         Returns:
-            RMSE per depth, shape (n_layers,).
+            RMSE per dimension, shape (theta_dim,).
         """
         return ((pred - target) ** 2).mean(dim=0).sqrt()
 
     @staticmethod
     def forward_residual(
-        pred_kappa: torch.Tensor,
-        measured_signal: torch.Tensor,
-        forward_model,
-        **forward_kwargs,
+        pred_theta: torch.Tensor,
+        y_measured: torch.Tensor,
+        forward_model: ForwardModel,
     ) -> torch.Tensor:
         """Residual between forward-modeled signal and measurement.
 
         Args:
-            pred_kappa: Predicted κ profile.
-            measured_signal: Measured V_3ω signal.
+            pred_theta: Predicted θ (physical space).
+            y_measured: Measured signal.
             forward_model: Forward model instance.
 
         Returns:
             L2 norm of signal residual.
         """
-        # TODO: Compute forward model on pred_kappa, compare
-        raise NotImplementedError
+        with torch.no_grad():
+            y_pred = forward_model(pred_theta)
+        return ((y_pred - y_measured) ** 2).mean().sqrt()
 
     @staticmethod
     def calibration_curve(
@@ -64,32 +77,31 @@ class InversionMetrics:
         """Compute calibration curve for posterior samples.
 
         For each confidence level p, checks what fraction of true values
-        fall within the p-confidence interval.
+        fall within the p-confidence interval. A well-calibrated model
+        should give observed_coverage ≈ expected_coverage.
 
         Args:
-            samples: Posterior samples, shape (batch, n_samples, x_dim).
-            target: True values, shape (batch, x_dim).
+            samples: Posterior samples, shape (batch, n_samples, theta_dim).
+            target: True values, shape (batch, theta_dim).
             n_bins: Number of confidence levels.
 
         Returns:
-            (expected_coverage, observed_coverage) arrays.
+            (expected_coverage, observed_coverage) arrays of shape (n_bins,).
         """
-        # TODO: Implement calibration check
-        raise NotImplementedError
+        expected = np.linspace(0, 1, n_bins + 2)[1:-1]
+        observed = np.zeros_like(expected)
+
+        for i, p in enumerate(expected):
+            lower = samples.quantile((1 - p) / 2, dim=1)
+            upper = samples.quantile((1 + p) / 2, dim=1)
+            in_interval = ((target >= lower) & (target <= upper)).float()
+            observed[i] = in_interval.mean().item()
+
+        return expected, observed
 
     @staticmethod
-    def nll(
-        samples: torch.Tensor, target: torch.Tensor
-    ) -> torch.Tensor:
-        """Negative log-likelihood under Gaussian approximation.
-
-        Args:
-            samples: Posterior samples, shape (batch, n_samples, x_dim).
-            target: True values, shape (batch, x_dim).
-
-        Returns:
-            Average NLL scalar.
-        """
+    def nll(samples: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Negative log-likelihood under Gaussian approximation."""
         mean = samples.mean(dim=1)
         std = samples.std(dim=1) + 1e-8
         nll = 0.5 * (
@@ -97,3 +109,8 @@ class InversionMetrics:
             + ((target - mean) / std) ** 2
         )
         return nll.mean()
+
+    @staticmethod
+    def sharpness(samples: torch.Tensor) -> torch.Tensor:
+        """Average posterior standard deviation (lower = sharper)."""
+        return samples.std(dim=1).mean()
